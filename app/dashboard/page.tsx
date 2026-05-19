@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   CircleDot,
   MapPinned,
-  Plus,
   ShieldAlert,
   SignalHigh,
 } from "lucide-react";
@@ -58,6 +57,7 @@ export default function DashboardPage() {
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [dogName, setDogName] = useState("");
   const [dogBreed, setDogBreed] = useState("");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [savingDog, setSavingDog] = useState(false);
@@ -171,10 +171,26 @@ export default function DashboardPage() {
 
     try {
       const supabase = createSupabaseBrowserClient();
+      
+      let finalPhotoPath = null;
+      if (photoFile) {
+        const fileExt = photoFile.name.split('.').pop();
+        const fileName = `${ownerId}-${Date.now()}.${fileExt}`;
+        const { error: uploadError, data } = await supabase.storage
+          .from("dogs")
+          .upload(fileName, photoFile);
+          
+        if (!uploadError && data) {
+          const { data: publicUrlData } = supabase.storage.from("dogs").getPublicUrl(fileName);
+          finalPhotoPath = publicUrlData.publicUrl;
+        }
+      }
+
       const dogInsert: Database["public"]["Tables"]["dogs"]["Insert"] = {
         owner_id: ownerId,
         name: dogName.trim(),
         breed: dogBreed.trim() || null,
+        photo_path: finalPhotoPath,
         device_id: selectedDeviceId || null,
         status: selectedDeviceId ? "active" : "inactive",
       };
@@ -198,6 +214,7 @@ export default function DashboardPage() {
       setDevices(devicesResult.data ?? []);
       setDogName("");
       setDogBreed("");
+      setPhotoFile(null);
       setSelectedDeviceId("");
       setIsModalOpen(false);
     } catch (createError) {
@@ -227,10 +244,10 @@ export default function DashboardPage() {
       <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_20px_50px_rgba(11,27,40,0.08)]">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand">Acceso requerido</p>
         <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl text-foreground">Inicia sesión para ver tus perros</h1>
-        <p className="mt-3 max-w-xl text-sm leading-6 text-muted">El panel ahora se alimenta únicamente de Supabase. Al entrar con tu usuario verás sólo tus perros, dispositivos y alertas.</p>
+        <p className="mt-3 max-w-xl text-sm leading-6 text-muted">Al entrar con tu usuario verás tus perros, dispositivos y alertas en un panel unificado.</p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link href="/login" className="rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#233445]">Entrar</Link>
-          <Link href="/register" className="rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-soft">Crear cuenta</Link>
+          <Link href="/register" className="rounded-full border border-brand/20 bg-brand/10 px-4 py-2 text-sm font-semibold text-brand transition hover:bg-brand/15">Crear cuenta</Link>
         </div>
       </section>
     );
@@ -238,7 +255,7 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-5 lg:gap-6">
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-4">
         <div className="rounded-[2rem] border border-white/80 bg-[linear-gradient(140deg,#fffdf9_0%,#f4ede3_100%)] p-5 shadow-[0_20px_50px_rgba(11,27,40,0.08)] sm:p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-2xl space-y-3">
@@ -249,223 +266,118 @@ export default function DashboardPage() {
                 Controla perros, dispositivos y alertas con una vista limpia.
               </h1>
               <p className="max-w-xl text-sm leading-6 text-muted sm:text-base">
-                Esta pantalla ya se alimenta de Supabase: sólo perros reales del usuario autenticado, sin datos de demo ni nombres inventados.
+                Datos reales del usuario autenticado, organizados en un panel claro y sin contenido de demostración.
               </p>
             </div>
 
-            <div className="grid min-w-[220px] gap-3 rounded-[1.5rem] border border-border bg-white/85 p-4">
-              <div className="flex items-center justify-between gap-4 rounded-[1.1rem] bg-soft px-4 py-3">
+            <div className="flex flex-wrap gap-3">
+              <div className="flex items-center gap-3 rounded-[1.1rem] bg-white/85 border border-border px-4 py-2">
+                <CircleDot className="h-5 w-5 text-accent" />
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Conectados</p>
-                  <p className="mt-1 text-2xl font-bold text-foreground">{connectedDogs}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Total</p>
+                  <p className="text-lg font-bold text-foreground leading-none">{orderedDogs.length}</p>
                 </div>
-                <CheckCircle2 className="h-6 w-6 text-emerald-600" />
               </div>
 
-              <div className="flex items-center justify-between gap-4 rounded-[1.1rem] bg-soft px-4 py-3">
+              <div className="flex items-center gap-3 rounded-[1.1rem] bg-white/85 border border-border px-4 py-2">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Fuera de línea</p>
-                  <p className="mt-1 text-2xl font-bold text-foreground">{disconnectedDogs}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Conectados</p>
+                  <p className="text-lg font-bold text-foreground leading-none">{connectedDogs}</p>
                 </div>
-                <SignalHigh className="h-6 w-6 text-brand" />
               </div>
-            </div>
-          </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-[1.35rem] border border-border bg-white/85 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Batería media</p>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <span className="text-3xl font-bold text-foreground">{averageBatteryLevel ?? "—"}</span>
-                <BatteryCharging className="h-6 w-6 text-brand" />
+              <div className="flex items-center gap-3 rounded-[1.1rem] bg-white/85 border border-border px-4 py-2">
+                <SignalHigh className="h-5 w-5 text-brand" />
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Off-line</p>
+                  <p className="text-lg font-bold text-foreground leading-none">{disconnectedDogs}</p>
+                </div>
               </div>
-              <p className="mt-2 text-xs text-muted">
-                {averageBatteryLevel !== null
-                  ? "Promedio de perros con dispositivo vinculado"
-                  : "Sin pechera o collar conectado"}
-              </p>
-            </div>
-            <div className="rounded-[1.35rem] border border-border bg-white/85 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Pacientes activos</p>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <span className="text-3xl font-bold text-foreground">{orderedDogs.length}</span>
-                <CircleDot className="h-6 w-6 text-accent" />
-              </div>
-            </div>
-            <div className="rounded-[1.35rem] border border-border bg-white/85 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Riesgo</p>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <span className="text-3xl font-bold text-foreground">{riskDogs.length}</span>
-                <ShieldAlert className="h-6 w-6 text-alert" />
+
+              <div className="flex items-center gap-3 rounded-[1.1rem] bg-white/85 border border-border px-4 py-2">
+                <ShieldAlert className="h-5 w-5 text-alert" />
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Alertas</p>
+                  <p className="text-lg font-bold text-foreground leading-none">{riskDogs.length}</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-
-        <article className="overflow-hidden rounded-[2rem] border border-white/80 bg-[linear-gradient(160deg,#13202b_0%,#233445_100%)] p-5 text-white shadow-[0_20px_50px_rgba(11,27,40,0.12)] sm:p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">Paciente destacado</p>
-              <h2 className="mt-2 text-2xl font-semibold">{featuredDog ? featuredDog.name : "Sin pacientes"}</h2>
-              <p className="mt-1 text-sm text-white/75">{featuredDog ? featuredDog.breed ?? "Sin raza registrada" : "Añade un perro para verlo aquí"}</p>
-            </div>
-            <div className={`rounded-full px-3 py-1 text-xs font-semibold ${featuredDog?.device_id ? "bg-emerald-500/20 text-emerald-200" : "bg-alert/20 text-alert"}`}>
-              {featuredDog?.device_id ? "Conectado" : "Sin dispositivo"}
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[1.4rem] border border-white/10 bg-white/8 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">Última señal</p>
-              <p className="mt-2 text-lg font-semibold">{featuredDog?.last_seen_at ? new Date(featuredDog.last_seen_at).toLocaleString() : "Sin lecturas"}</p>
-            </div>
-            <div className="rounded-[1.4rem] border border-white/10 bg-white/8 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">Dispositivo</p>
-              <p className="mt-2 text-lg font-semibold">{featuredDog?.device_id ?? "Sin dispositivo vinculado"}</p>
-            </div>
-          </div>
-
-          <div className="mt-5 rounded-[1.6rem] border border-white/10 bg-white/8 p-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">Atajos</p>
-                <p className="mt-1 text-lg font-semibold">Acciones frecuentes</p>
-              </div>
-              <ArrowRight className="h-5 w-5 text-white/70" />
-            </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <Link href={featuredDog ? `/perro/${featuredDog.id}` : "/register"} className="rounded-[1.1rem] bg-white px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f5efe6]">
-                Abrir ficha
-              </Link>
-              <button type="button" onClick={() => setIsModalOpen(true)} className="rounded-[1.1rem] border border-white/15 bg-[#f3ece2] px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#e7dece]">
-                Vincular dispositivo
-              </button>
-            </div>
-          </div>
-        </article>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1fr_0.95fr]">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand">
-                Pacientes activos
-              </p>
-              <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-foreground">
-                Watchlist clínica
-              </h2>
-            </div>
-            <span className="rounded-full border border-border bg-white/85 px-3 py-1 text-xs font-semibold text-muted">
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand">
+              Pacientes activos
+            </p>
+            <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-foreground">
+              Watchlist y ubicación
+            </h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:inline-flex rounded-full border border-border bg-white/85 px-3 py-1 text-xs font-semibold text-muted">
               Ordenados por conexión
             </span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {orderedDogs.map((dog, index) => (
-              <Link
-                key={dog.id}
-                href={`/perro/${dog.id}`}
-                className="group rounded-[1.65rem] border border-white/80 bg-[linear-gradient(180deg,#fffdf9_0%,#f6efe5_100%)] p-4 shadow-[0_14px_35px_rgba(11,27,40,0.08)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(11,27,40,0.14)]"
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-[1.4rem] bg-gradient-to-br ${avatarGradients[index % avatarGradients.length]} text-lg font-bold text-white shadow-[0_10px_22px_rgba(0,0,0,0.12)]`}>
-                    {getInitials(dog.name)}
-                  </div>
-
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <h2 className="truncate text-lg font-bold text-foreground">
-                        {dog.name}
-                      </h2>
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${dog.device_id ? "bg-emerald-500/12 text-emerald-700" : "bg-alert/12 text-alert"}`}>
-                        {getDogStatusLabel(dog)}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted">{dog.breed ?? "Sin raza registrada"}</p>
-                    <div className="flex flex-wrap items-center gap-3 pt-2 text-sm text-muted">
-                      <span className="flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1">
-                        <SignalHigh className="h-4 w-4 text-brand" />
-                        {dog.last_seen_at ? new Date(dog.last_seen_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Sin lectura"}
-                      </span>
-                      <span className="flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1">
-                        <BatteryCharging className="h-4 w-4 text-alert" />
-                        {dog.battery_level}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="rounded-full bg-brand px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand/90"
+            >
+              Vincular dispositivo
+            </button>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-[1.7rem] border border-white/80 bg-white/92 p-5 shadow-[0_14px_35px_rgba(11,27,40,0.08)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand">
-              Mapa y estado
-            </p>
-            <h3 className="mt-2 text-xl font-semibold text-foreground">Última ubicación conocida</h3>
-            <div className="mt-4 aspect-[4/3] rounded-[1.4rem] border border-dashed border-border bg-[radial-gradient(circle_at_20%_20%,rgba(28,110,140,0.22),transparent_16%),radial-gradient(circle_at_80%_30%,rgba(138,90,52,0.18),transparent_18%),linear-gradient(135deg,#f5efe6,#ebe2d5)] p-4">
-              <div className="flex h-full flex-col justify-between rounded-[1.2rem] border border-white/60 bg-white/35 p-4 backdrop-blur-sm">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Dispositivo</p>
-                      <p className="mt-1 text-lg font-semibold text-foreground">{devices.find((device) => device.id === featuredDog?.device_id)?.code ?? "Sin dispositivo"}</p>
-                  </div>
-                  <MapPinned className="h-5 w-5 text-brand" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {orderedDogs.map((dog, index) => (
+            <Link
+              key={dog.id}
+              href={`/perro/${dog.id}`}
+              className="group flex flex-col justify-between rounded-[1.65rem] border border-white/80 bg-[linear-gradient(180deg,#fffdf9_0%,#f6efe5_100%)] p-4 shadow-[0_14px_35px_rgba(11,27,40,0.08)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(11,27,40,0.14)]"
+            >
+              <div className="flex items-start gap-3">
+                <div className={`flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-[1.4rem] bg-gradient-to-br ${avatarGradients[index % avatarGradients.length]} text-lg font-bold text-white shadow-[0_10px_22px_rgba(0,0,0,0.12)]`}>
+                  {getInitials(dog.name)}
                 </div>
-                <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Rango de prueba</p>
-                      <p className="mt-1 text-sm font-semibold text-foreground">Hasta 5 m alrededor del dispositivo seleccionado</p>
-                  </div>
-                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-foreground shadow-sm">
-                    Actualización activa
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <div className="rounded-[1.7rem] border border-white/80 bg-[linear-gradient(180deg,#fffdf9_0%,#f6efe5_100%)] p-5 shadow-[0_14px_35px_rgba(11,27,40,0.08)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand">
-              Riesgos recientes
-            </p>
-            <h3 className="mt-2 text-xl font-semibold text-foreground">Atención prioritaria</h3>
-            <div className="mt-4 space-y-3">
-              {riskDogs.length > 0 ? riskDogs.map((dog) => (
-                <div key={dog.id} className="rounded-[1.2rem] border border-border bg-white/85 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-foreground">{dog.name}</p>
-                      <p className="text-sm text-muted">Batería {dog.battery_level}% · Temperatura {dog.temperature} °C</p>
-                    </div>
-                    <span className="rounded-full bg-alert/12 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-alert">
-                      Prioridad
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="truncate text-lg font-bold text-foreground">
+                      {dog.name}
+                    </h2>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${dog.device_id ? "bg-emerald-500/12 text-emerald-700" : "bg-alert/12 text-alert"}`}>
+                      {getDogStatusLabel(dog)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted">{dog.breed ?? "Sin raza registrada"}</p>
+                  <div className="flex flex-wrap items-center gap-3 pt-2 text-sm text-muted">
+                    <span className="flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1">
+                      <SignalHigh className="h-4 w-4 text-brand" />
+                      {dog.last_seen_at ? new Date(dog.last_seen_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Sin lectura"}
+                    </span>
+                    <span className="flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1">
+                      <BatteryCharging className="h-4 w-4 text-alert" />
+                      {dog.battery_level}%
                     </span>
                   </div>
                 </div>
-              )) : (
-                <div className="rounded-[1.2rem] border border-border bg-white/85 px-4 py-3 text-sm text-muted">
-                  No hay pacientes en riesgo visible ahora mismo.
+              </div>
+              
+              <div className="mt-4 rounded-[1.2rem] border border-dashed border-border bg-[radial-gradient(circle_at_20%_20%,rgba(28,110,140,0.1),transparent_16%),linear-gradient(135deg,#f5efe6,#ebe2d5)] p-3">
+                <div className="flex items-center justify-between gap-2 rounded-[1rem] bg-white/40 p-2 backdrop-blur-sm">
+                  <div className="flex items-center gap-2">
+                    <MapPinned className="h-4 w-4 text-brand" />
+                    <p className="text-xs font-semibold text-foreground">Última ubicación conocida</p>
+                  </div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-muted">A 5m del radio</span>
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            </Link>
+          ))}
         </div>
       </section>
-
-      <div className="fixed bottom-24 left-1/2 z-40 flex w-full max-w-[480px] -translate-x-1/2 justify-end px-4 pointer-events-none">
-        <button
-          type="button"
-          onClick={() => setIsModalOpen(true)}
-          aria-label="Agregar perro"
-          className="pointer-events-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-white shadow-[0_18px_30px_rgba(11,27,40,0.32)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#233445]"
-        >
-          <Plus className="h-7 w-7" strokeWidth={2.5} />
-        </button>
-      </div>
 
       {isModalOpen ? (
         <div
@@ -520,6 +432,20 @@ export default function DashboardPage() {
               </label>
 
               <label className="block text-sm font-semibold text-foreground">
+                Foto del perro (Opcional, arrastra o selecciona)
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    if (event.target.files && event.target.files.length > 0) {
+                      setPhotoFile(event.target.files[0]);
+                    }
+                  }}
+                  className="mt-2 block w-full text-sm text-muted file:mr-4 file:rounded-full file:border-0 file:bg-brand/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand hover:file:bg-brand/20 outline-none"
+                />
+              </label>
+
+              <label className="block text-sm font-semibold text-foreground">
                 Vincular dispositivo
                 <select
                   value={selectedDeviceId}
@@ -527,10 +453,12 @@ export default function DashboardPage() {
                   className="mt-2 h-12 w-full rounded-[1rem] border border-border bg-soft px-4 text-base text-foreground outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/15"
                 >
                   <option value="">Sin dispositivo</option>
-                  {devices.map((device) => (
-                    <option key={device.id} value={device.id}>
-                      {device.code} {device.label ? `· ${device.label}` : ""}
-                    </option>
+                  {devices
+                    .filter((device) => !dogs.some((dog) => dog.device_id === device.id))
+                    .map((device) => (
+                      <option key={device.id} value={device.id}>
+                        {device.code} {device.label ? `· ${device.label}` : ""}
+                      </option>
                   ))}
                 </select>
               </label>

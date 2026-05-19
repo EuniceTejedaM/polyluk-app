@@ -14,6 +14,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(28,110,140,0.14),transparent_30%),radial-gradient(circle_at_top_right,rgba(138,90,52,0.12),transparent_26%),radial-gradient(circle_at_bottom_center,rgba(15,23,32,0.06),transparent_32%),linear-gradient(180deg,#f9f4ed_0%,#f2eadf_48%,#ede2d4_100%)]"
+      />
       <main
         className={`mx-auto flex min-h-screen w-full flex-col ${
           isAuthOrLandingRoute

@@ -33,11 +33,13 @@ html {
 body {
   min-height: 100%;
   margin: 0;
-  background:
+  background-color: #f3eadf;
+  background-image:
     radial-gradient(circle at top left, rgba(28, 110, 140, 0.16), transparent 28%),
     radial-gradient(circle at top right, rgba(138, 90, 52, 0.14), transparent 26%),
     radial-gradient(circle at bottom center, rgba(15, 23, 32, 0.05), transparent 30%),
-    linear-gradient(180deg, #f8f3ec 0%, #f4efe8 46%, #efe7dc 100%);
+    linear-gradient(180deg, #f9f4ed 0%, #f2eadf 48%, #ede2d4 100%);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-body), sans-serif;
 }

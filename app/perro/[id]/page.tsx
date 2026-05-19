@@ -49,6 +49,15 @@ export default function DogDetailPage() {
   const [dog, setDog] = useState<DogRow | null>(null);
   const [medicalEvents, setMedicalEvents] = useState<MedicalEventRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [savingEvent, setSavingEvent] = useState(false);
+
+  // Historial Form
+  const [newEventTitle, setNewEventTitle] = useState("");
+  const [newEventDesc, setNewEventDesc] = useState("");
+
+  // Graficas
+  const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
+  const [simulatedData, setSimulatedData] = useState<Record<string, number[]>>({});
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -66,8 +75,19 @@ export default function DogDetailPage() {
         return;
       }
 
-      setDog(dogResult.data ?? null);
+      const loadedDog = dogResult.data as DogRow | null;
+      setDog(loadedDog);
       setMedicalEvents(eventsResult.data ?? []);
+
+      if (loadedDog && loadedDog.device_id) {
+        setSimulatedData({
+          heart_rate: Array(15).fill(loadedDog.heart_rate),
+          temperature: Array(15).fill(loadedDog.temperature),
+          respiration_rate: Array(15).fill(loadedDog.respiration_rate),
+          oxygen_saturation: Array(15).fill(loadedDog.oxygen_saturation),
+        });
+      }
+
       setLoading(false);
     };
 
@@ -77,6 +97,52 @@ export default function DogDetailPage() {
       cancelled = true;
     };
   }, [params.id]);
+
+  useEffect(() => {
+    if (!dog || !dog.device_id) return;
+    
+    const interval = setInterval(() => {
+      setSimulatedData((prev) => {
+        const randomize = (val: number, variance: number) => {
+          const change = (Math.random() * variance * 2) - variance;
+          return Number((val + change).toFixed(1));
+        };
+
+        return {
+          heart_rate: [...(prev.heart_rate || []).slice(1), randomize(prev.heart_rate?.[prev.heart_rate.length - 1] ?? 70, 3)],
+          temperature: [...(prev.temperature || []).slice(1), randomize(prev.temperature?.[prev.temperature.length - 1] ?? 38, 0.2)],
+          respiration_rate: [...(prev.respiration_rate || []).slice(1), randomize(prev.respiration_rate?.[prev.respiration_rate.length - 1] ?? 20, 1)],
+          oxygen_saturation: [...(prev.oxygen_saturation || []).slice(1), Math.min(100, Math.max(90, randomize(prev.oxygen_saturation?.[prev.oxygen_saturation.length - 1] ?? 98, 0.5)))],
+        };
+      });
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [dog]);
+
+  async function handleAddEvent(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newEventTitle.trim() || !dog) return;
+
+    setSavingEvent(true);
+    const supabase = createSupabaseBrowserClient();
+    const eventInsert = {
+      owner_id: dog.owner_id,
+      dog_id: dog.id,
+      title: newEventTitle.trim(),
+      description: newEventDesc.trim() || null,
+      event_date: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from("medical_events").insert([eventInsert] as any);
+    if (!error) {
+      setNewEventTitle("");
+      setNewEventDesc("");
+      const { data } = await supabase.from("medical_events").select("*").eq("dog_id", dog.id).order("event_date", { ascending: false });
+      setMedicalEvents(data ?? []);
+    }
+    setSavingEvent(false);
+  }
 
   if (loading) {
     return <div className="h-64 animate-pulse rounded-[2rem] bg-white/70" />;
@@ -99,6 +165,46 @@ export default function DogDetailPage() {
   }
 
   const connected = Boolean(dog.device_id);
+
+  const renderGraph = (metricKey: string) => {
+    const data = simulatedData[metricKey];
+    if (!data || data.length === 0) return null;
+
+    const min = Math.min(...data) - 2;
+    const max = Math.max(...data) + 2;
+    const range = max - min || 1;
+    const width = 200;
+    const height = 40;
+
+    const points = data.map((val, i) => {
+      const x = (i / (data.length - 1)) * width;
+      const y = height - ((val - min) / range) * height;
+      return `${x},${y}`;
+    }).join(' ');
+
+    return (
+      <div className="mt-4 border-t border-border pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-12 w-full overflow-visible" preserveAspectRatio="none">
+          <polyline
+            points={points}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-brand opacity-80"
+          />
+          {/* Pulsing end point */}
+          <circle 
+            cx={width} 
+            cy={height - ((data[data.length - 1] - min) / range) * height} 
+            r="3" 
+            className="fill-brand animate-pulse" 
+          />
+        </svg>
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -139,9 +245,9 @@ export default function DogDetailPage() {
                 <BatteryMedium className="h-4 w-4 text-brand" />
                 {dog.battery_level}% batería
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-soft px-3 py-1.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-soft px-3 py-1.5 hidden">
                 <Wifi className="h-4 w-4 text-brand" />
-                {dog.device_id ?? "Sin dispositivo"}
+                Dispositivo vinculado
               </span>
             </div>
           </div>
@@ -151,12 +257,19 @@ export default function DogDetailPage() {
       <section className="grid grid-cols-2 gap-3">
         {metricCards.map((metric) => {
           const Icon = metric.icon;
-          const value = dog[metric.key];
+          // Use simulated data if connected, else static db value
+          const dataHistory = simulatedData[metric.key];
+          const currentValue = connected && dataHistory && dataHistory.length > 0 
+            ? dataHistory[dataHistory.length - 1] 
+            : dog[metric.key];
+            
+          const isExpanded = expandedMetric === metric.key;
 
           return (
             <article
               key={metric.key}
-              className="rounded-[1.45rem] border border-border bg-white/95 p-4 shadow-[0_12px_28px_rgba(11,27,40,0.07)]"
+              onClick={() => connected && setExpandedMetric(isExpanded ? null : metric.key)}
+              className={`rounded-[1.45rem] border border-border bg-white/95 p-4 shadow-[0_12px_28px_rgba(11,27,40,0.07)] ${connected ? 'cursor-pointer hover:border-brand/40 transition-colors' : ''} ${isExpanded ? 'col-span-2' : ''}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -164,7 +277,7 @@ export default function DogDetailPage() {
                     {metric.label}
                   </p>
                   <p className="mt-2 font-[family-name:var(--font-display)] text-3xl text-foreground">
-                    {value}
+                    {currentValue}
                     <span className="ml-1 text-base text-muted">{metric.unit}</span>
                   </p>
                 </div>
@@ -172,6 +285,7 @@ export default function DogDetailPage() {
                   <Icon className="h-5 w-5" />
                 </div>
               </div>
+              {isExpanded && connected && renderGraph(metric.key)}
             </article>
           );
         })}
@@ -187,10 +301,6 @@ export default function DogDetailPage() {
             <span className="font-semibold text-foreground">{dog.last_seen_at ? formatDate(dog.last_seen_at) : "Sin lecturas"}</span>
           </div>
           <div className="flex items-center justify-between gap-4">
-            <span>Dispositivo enlazado</span>
-            <span className="font-semibold text-foreground">{dog.device_id ?? "Sin dispositivo"}</span>
-          </div>
-          <div className="flex items-center justify-between gap-4">
             <span>Temperatura de referencia</span>
             <span className="font-semibold text-foreground">{dog.temperature} °C</span>
           </div>
@@ -202,7 +312,35 @@ export default function DogDetailPage() {
           <ClipboardList className="h-5 w-5 text-brand" />
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted">Historial médico</p>
         </div>
-        <div className="mt-4 space-y-3">
+
+        <form onSubmit={handleAddEvent} className="mt-4 space-y-3">
+          <div className="space-y-2">
+            <input 
+              type="text" 
+              placeholder="Ej. Vacuna Rabia" 
+              value={newEventTitle}
+              onChange={(e) => setNewEventTitle(e.target.value)}
+              className="w-full rounded-[1rem] border border-border bg-soft px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/15"
+              required 
+            />
+            <input 
+              type="text" 
+              placeholder="Descripción breve (opcional)" 
+              value={newEventDesc}
+              onChange={(e) => setNewEventDesc(e.target.value)}
+              className="w-full rounded-[1rem] border border-border bg-soft px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/15"
+            />
+            <button 
+              type="submit" 
+              disabled={savingEvent || !newEventTitle.trim()}
+              className="w-full rounded-[1rem] bg-brand text-white py-3 text-sm font-bold shadow-md transition hover:bg-brand/90 disabled:opacity-50"
+            >
+              {savingEvent ? "Añadiendo..." : "Añadir al historial"}
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-6 space-y-3">
           {medicalEvents.length > 0 ? medicalEvents.map((event) => (
             <article key={event.id} className="rounded-[1.2rem] border border-border bg-soft px-4 py-3">
               <div className="flex items-start justify-between gap-3">
