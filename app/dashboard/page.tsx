@@ -171,13 +171,15 @@ export default function DashboardPage() {
 
     try {
       const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.from("dogs").insert({
+      const dogInsert: Database["public"]["Tables"]["dogs"]["Insert"] = {
         owner_id: ownerId,
         name: dogName.trim(),
         breed: dogBreed.trim() || null,
         device_id: selectedDeviceId || null,
         status: selectedDeviceId ? "active" : "inactive",
-      });
+      };
+
+      const { error } = await supabase.from("dogs").insert([dogInsert] as never[]);
 
       if (error) {
         throw error;
