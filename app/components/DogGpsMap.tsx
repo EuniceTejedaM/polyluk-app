@@ -29,7 +29,7 @@ function offsetCoordinate(latitude: number, longitude: number, distanceMeters: n
   return [
     (nextLatitude * 180) / Math.PI,
     ((nextLongitude * 180) / Math.PI + 540) % 360 - 180,
-  ] as const;
+  ] as [number, number];
 }
 
 function formatCoordinate(value: number) {
