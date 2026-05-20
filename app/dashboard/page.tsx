@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRight,
   BatteryCharging,
   CheckCircle2,
   CircleDot,
@@ -15,7 +14,19 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/supabase/database.types";
 
 type DogRow = Database["public"]["Tables"]["dogs"]["Row"];
-type DeviceRow = Database["public"]["Tables"]["devices"]["Row"];
+type DogDeviceType = Database["public"]["Enums"]["dog_device_type"];
+
+const deviceTypeLabels: Record<DogDeviceType, string> = {
+  collar: "Collar",
+  pechera: "Pechera",
+  arnes_tactico: "Arnés táctico",
+};
+
+const deviceTypeOptions = [
+  { value: "collar", label: "Collar", description: "Ritmo cardiaco, estrés y GPS." },
+  { value: "pechera", label: "Pechera", description: "Ritmo cardiaco, estrés, GPS, temperatura y oxígeno." },
+  { value: "arnes_tactico", label: "Arnés táctico", description: "Ritmo cardiaco, estrés, GPS, temperatura, oxígeno y caídas." },
+] as const;
 
 const avatarGradients = [
   "from-[#1c6e8c] to-[#3d8aa5]",
@@ -42,11 +53,11 @@ function getDogStatusLabel(dog: DogRow) {
     return "Atención";
   }
 
-  if (dog.device_id) {
-    return "Conectado";
+  if (dog.device_type) {
+    return deviceTypeLabels[dog.device_type];
   }
 
-  return "Sin dispositivo";
+  return "Sin tipo";
 }
 
 export default function DashboardPage() {
@@ -54,11 +65,10 @@ export default function DashboardPage() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [dogs, setDogs] = useState<DogRow[]>([]);
-  const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [dogName, setDogName] = useState("");
   const [dogBreed, setDogBreed] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+  const [selectedDeviceType, setSelectedDeviceType] = useState<DogDeviceType | "">("");
   const [loading, setLoading] = useState(true);
   const [savingDog, setSavingDog] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -80,26 +90,21 @@ export default function DashboardPage() {
 
       if (!user) {
         setDogs([]);
-        setDevices([]);
         setLoading(false);
         return;
       }
 
-      const [dogsResult, devicesResult] = await Promise.all([
-        supabase
-          .from("dogs")
-          .select("*")
-          .eq("owner_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase.from("devices").select("*").order("created_at", { ascending: false }),
-      ]);
+      const dogsResult = await supabase
+        .from("dogs")
+        .select("*")
+        .eq("owner_id", user.id)
+        .order("created_at", { ascending: false });
 
       if (cancelled) {
         return;
       }
 
       setDogs(dogsResult.data ?? []);
-      setDevices(devicesResult.data ?? []);
       setLoading(false);
     };
 
@@ -140,17 +145,17 @@ export default function DashboardPage() {
       return right.created_at.localeCompare(left.created_at);
     }
 
-    return left.device_id ? -1 : 1;
+    return right.created_at.localeCompare(left.created_at);
   });
 
-  const connectedDogs = orderedDogs.filter((dog) => dog.device_id).length;
-  const disconnectedDogs = orderedDogs.length - connectedDogs;
+  const typedDogs = orderedDogs.filter((dog) => dog.device_type).length;
+  const untypedDogs = orderedDogs.length - typedDogs;
   const featuredDog = orderedDogs[0] ?? null;
   const riskDogs = orderedDogs.filter(
     (dog) => dog.battery_level < 30 || dog.temperature > 38.7 || dog.status === "sick",
   );
   const connectedBatteryLevels = orderedDogs
-    .filter((dog) => dog.device_id && typeof dog.battery_level === "number")
+    .filter((dog) => dog.device_type && typeof dog.battery_level === "number")
     .map((dog) => dog.battery_level);
   const averageBatteryLevel =
     connectedBatteryLevels.length > 0
@@ -163,6 +168,11 @@ export default function DashboardPage() {
   async function handleCreateDog() {
     if (!ownerId || !dogName.trim()) {
       setMessage("Agrega al menos el nombre del perro.");
+      return;
+    }
+
+    if (!selectedDeviceType) {
+      setMessage("Selecciona el tipo de dispositivo antes de guardar.");
       return;
     }
 
@@ -191,8 +201,8 @@ export default function DashboardPage() {
         name: dogName.trim(),
         breed: dogBreed.trim() || null,
         photo_path: finalPhotoPath,
-        device_id: selectedDeviceId || null,
-        status: selectedDeviceId ? "active" : "inactive",
+        device_type: selectedDeviceType,
+        status: "active",
       };
 
       const { error } = await supabase.from("dogs").insert([dogInsert] as never[]);
@@ -201,21 +211,17 @@ export default function DashboardPage() {
         throw error;
       }
 
-      const [dogsResult, devicesResult] = await Promise.all([
-        supabase
-          .from("dogs")
-          .select("*")
-          .eq("owner_id", ownerId)
-          .order("created_at", { ascending: false }),
-        supabase.from("devices").select("*").order("created_at", { ascending: false }),
-      ]);
+      const dogsResult = await supabase
+        .from("dogs")
+        .select("*")
+        .eq("owner_id", ownerId)
+        .order("created_at", { ascending: false });
 
       setDogs(dogsResult.data ?? []);
-      setDevices(devicesResult.data ?? []);
       setDogName("");
       setDogBreed("");
       setPhotoFile(null);
-      setSelectedDeviceId("");
+      setSelectedDeviceType("");
       setIsModalOpen(false);
     } catch (createError) {
       setMessage(createError instanceof Error ? createError.message : "No se pudo crear el perro.");
@@ -244,7 +250,7 @@ export default function DashboardPage() {
       <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_20px_50px_rgba(11,27,40,0.08)]">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand">Acceso requerido</p>
         <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl text-foreground">Inicia sesión para ver tus perros</h1>
-        <p className="mt-3 max-w-xl text-sm leading-6 text-muted">Al entrar con tu usuario verás tus perros, dispositivos y alertas en un panel unificado.</p>
+        <p className="mt-3 max-w-xl text-sm leading-6 text-muted">Al entrar con tu usuario verás tus perros, sus tipos de dispositivo y alertas en un panel unificado.</p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link href="/login" className="rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#233445]">Entrar</Link>
           <Link href="/register" className="rounded-full border border-brand/20 bg-brand/10 px-4 py-2 text-sm font-semibold text-brand transition hover:bg-brand/15">Crear cuenta</Link>
@@ -263,10 +269,10 @@ export default function DashboardPage() {
                 Centro de operaciones
               </p>
               <h1 className="font-[family-name:var(--font-display)] text-3xl leading-none text-foreground sm:text-4xl">
-                Controla perros, dispositivos y alertas con una vista limpia.
+                Controla perros, tipos de dispositivo y alertas con una vista limpia.
               </h1>
               <p className="max-w-xl text-sm leading-6 text-muted sm:text-base">
-                Datos reales del usuario autenticado, organizados en un panel claro y sin contenido de demostración.
+                Datos reales del usuario autenticado, organizados en un panel claro y sin depender de dispositivos fijos.
               </p>
             </div>
 
@@ -282,16 +288,16 @@ export default function DashboardPage() {
               <div className="flex items-center gap-3 rounded-[1.1rem] bg-white/85 border border-border px-4 py-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Conectados</p>
-                  <p className="text-lg font-bold text-foreground leading-none">{connectedDogs}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Con tipo</p>
+                  <p className="text-lg font-bold text-foreground leading-none">{typedDogs}</p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 rounded-[1.1rem] bg-white/85 border border-border px-4 py-2">
                 <SignalHigh className="h-5 w-5 text-brand" />
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Off-line</p>
-                  <p className="text-lg font-bold text-foreground leading-none">{disconnectedDogs}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Sin tipo</p>
+                  <p className="text-lg font-bold text-foreground leading-none">{untypedDogs}</p>
                 </div>
               </div>
 
@@ -319,13 +325,13 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-3">
             <span className="hidden sm:inline-flex rounded-full border border-border bg-white/85 px-3 py-1 text-xs font-semibold text-muted">
-              Ordenados por conexión
+              Ordenados por fecha
             </span>
             <button
               onClick={() => setIsModalOpen(true)}
               className="rounded-full bg-brand px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-brand/90"
             >
-              Vincular dispositivo
+              Asignar tipo de dispositivo
             </button>
           </div>
         </div>
@@ -347,7 +353,7 @@ export default function DashboardPage() {
                     <h2 className="truncate text-lg font-bold text-foreground">
                       {dog.name}
                     </h2>
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${dog.device_id ? "bg-emerald-500/12 text-emerald-700" : "bg-alert/12 text-alert"}`}>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${dog.device_type ? "bg-emerald-500/12 text-emerald-700" : "bg-alert/12 text-alert"}`}>
                       {getDogStatusLabel(dog)}
                     </span>
                   </div>
@@ -392,10 +398,10 @@ export default function DashboardPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand">
-                  Conectar perro
+                  Nuevo perro
                 </p>
                 <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl text-foreground">
-                  Nuevo perro
+                  Asignar tipo de dispositivo
                 </h2>
               </div>
               <button
@@ -446,21 +452,24 @@ export default function DashboardPage() {
               </label>
 
               <label className="block text-sm font-semibold text-foreground">
-                Vincular dispositivo
+                Tipo de dispositivo
                 <select
-                  value={selectedDeviceId}
-                  onChange={(event) => setSelectedDeviceId(event.target.value)}
+                  value={selectedDeviceType}
+                  onChange={(event) => setSelectedDeviceType(event.target.value as DogDeviceType)}
                   className="mt-2 h-12 w-full rounded-[1rem] border border-border bg-soft px-4 text-base text-foreground outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/15"
                 >
-                  <option value="">Sin dispositivo</option>
-                  {devices
-                    .filter((device) => !dogs.some((dog) => dog.device_id === device.id))
-                    .map((device) => (
-                      <option key={device.id} value={device.id}>
-                        {device.code} {device.label ? `· ${device.label}` : ""}
-                      </option>
+                  <option value="">Selecciona una opción</option>
+                  {deviceTypeOptions.map((deviceType) => (
+                    <option key={deviceType.value} value={deviceType.value}>
+                      {deviceType.label}
+                    </option>
                   ))}
                 </select>
+                <span className="mt-2 block text-xs font-normal text-muted">
+                  {selectedDeviceType
+                    ? deviceTypeOptions.find((option) => option.value === selectedDeviceType)?.description
+                    : "El tipo de dispositivo define qué métricas se simulan para este perro."}
+                </span>
               </label>
 
               {message ? (

@@ -145,6 +145,7 @@ export type Database = {
           breed: string | null
           created_at: string
           device_id: string | null
+          device_type: Database["public"]["Enums"]["dog_device_type"] | null
           heart_rate: number
           id: string
           last_seen_at: string | null
@@ -169,6 +170,7 @@ export type Database = {
           breed?: string | null
           created_at?: string
           device_id?: string | null
+          device_type?: Database["public"]["Enums"]["dog_device_type"] | null
           heart_rate?: number
           id?: string
           last_seen_at?: string | null
@@ -193,6 +195,7 @@ export type Database = {
           breed?: string | null
           created_at?: string
           device_id?: string | null
+          device_type?: Database["public"]["Enums"]["dog_device_type"] | null
           heart_rate?: number
           id?: string
           last_seen_at?: string | null
@@ -263,6 +266,7 @@ export type Database = {
         | "surgery"
         | "test"
         | "other"
+      dog_device_type: "collar" | "pechera" | "arnes_tactico"
     }
     CompositeTypes: Record<string, never>
   }

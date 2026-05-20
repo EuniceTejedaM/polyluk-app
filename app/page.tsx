@@ -36,19 +36,19 @@ const productLines = [
   {
     title: "Doméstica",
     value: "Collar",
-    detail: "Monitoreo cardíaco, estrés, temperatura y oxigenación para seguimiento cotidiano.",
+    detail: "Monitoreo cardíaco, estrés y GPS para seguimiento cotidiano.",
     icon: Upload,
   },
   {
     title: "Service",
     value: "Pechera inteligente",
-    detail: "Mayor flexibilidad operativa, historial médico y compatibilidad clínica.",
+    detail: "Suma temperatura y oxígeno en sangre para vigilancia clínica.",
     icon: Stethoscope,
   },
   {
     title: "Heavy Duty",
     value: "Arnés táctico",
-    detail: "Giroscopio integral, detector de fatiga y alta resistencia en uso intensivo.",
+    detail: "Añade detección de golpes o caídas para uso intensivo.",
     icon: ShieldCheck,
   },
 ];
@@ -81,7 +81,7 @@ const steps = [
   },
   {
     title: "Registra a tu perro",
-    text: "Registra su información y vincula el dispositivo asignado.",
+    text: "Registra su información y asigna el tipo de dispositivo correspondiente.",
   },
   {
     title: "Supervisa y actúa",

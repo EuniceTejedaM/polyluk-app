@@ -72,7 +72,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
         </h1>
         <p className="mt-2 text-sm leading-6 text-muted">
           {isRegister
-            ? "Crea tu cuenta para registrar perros, vincular dispositivos y gestionar alertas."
+            ? "Crea tu cuenta para registrar perros, asignar un tipo de dispositivo y gestionar alertas."
             : "Accede a tu panel para ver perros, alertas y datos biométricos."}
         </p>
       </div>

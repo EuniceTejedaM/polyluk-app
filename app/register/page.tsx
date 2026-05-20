@@ -12,7 +12,7 @@ export default function RegisterPage() {
           Regístrate y empieza a gestionar tu operación.
         </h2>
         <p className="mt-4 max-w-xl text-sm leading-6 text-white/82 sm:text-base">
-          Crea tu cuenta para registrar perros, vincular dispositivos y seguir su evolución en el panel.
+          Crea tu cuenta para registrar perros, asignar un tipo de dispositivo y seguir su evolución en el panel.
         </p>
 
         <div className="mt-8 flex flex-wrap gap-3">
